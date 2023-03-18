@@ -1,0 +1,720 @@
+//+------------------------------------------------------------------+
+//|                                          e2mql5.mq5                                                                 |
+//+------------------------------------------------------------------+
+#property of 'e2 Ventures'
+#property version   "1.00"
+
+//https://github.com/gonzalomukherjeee/NYSE-Volatility-Pinescript-/blob/main/source-code
+
+#property strict
+#property indicator_chart_window
+#property indicator_buffers 42
+#property indicator_plots   10
+
+#property indicator_color1 clrLime
+#property indicator_color2 clrRed
+
+#property indicator_color3 clrRed
+#property indicator_color4 clrLime
+#property indicator_color5 clrRed
+#property indicator_color6 clrLime
+
+#property indicator_color7 clrLime
+#property indicator_color8 clrRed
+#property indicator_color9 clrLime
+#property indicator_color10 clrRed
+
+#property indicator_width1 2
+#property indicator_width2 2
+#property indicator_width3 2
+#property indicator_width4 2
+#property indicator_width5 2
+#property indicator_width6 2
+#property indicator_width7 2
+#property indicator_width8 2
+#property indicator_width9 2
+#property indicator_width10 2
+
+#property indicator_type1   DRAW_ARROW
+#property indicator_type2   DRAW_ARROW
+#property indicator_type3   DRAW_ARROW
+#property indicator_type4   DRAW_ARROW
+#property indicator_type5   DRAW_ARROW
+#property indicator_type6   DRAW_ARROW
+#property indicator_type7   DRAW_ARROW
+#property indicator_type8   DRAW_ARROW
+#property indicator_type9   DRAW_ARROW
+#property indicator_type10   DRAW_ARROW
+
+
+#include <Trade\SymbolInfo.mqh>
+CSymbolInfo    o_symbol;
+
+input string day_open    = "07:00";       // Day Open
+input string S0            = "---------"; // Session Setting
+input bool enSess1         = true;        // Session A
+input string session1_1    = "16:00";     // Session A begin
+input string session1_2    = "16:35";     // Session A end
+input int timeZone1        = 0;           // Time Zone (diff)
+input bool enSess2         = true;        // Session B
+input string session2_1    = "16:00";     // Session B begin
+input string session2_2    = "18:00";     // Session B end
+input int timeZone2        = 0;           // Time Zone 
+
+input string S1            = "---------"; // Candle Setting
+input double pipSize       = 22.3;        // Total Candle PIP
+input double pipSize2      = 25;          // Total PIP For 2 Candle
+input bool canIdEn         = false;       // Plot Candle Identify
+input int lineLen          = 5;           // Line Length
+
+input string S2            = "---------"; // Line Settings
+input color rd1st          = clrLime;     // Bull Color - 1st Line
+input color rd2nd          = clrRed;      // 2nd Line
+input color rd3rd          = clrLime;     // 3rd Line
+input color rd4th          = clrRed;      // 4th Line
+input color gr1st          = clrRed;      // Bear Color - 1st Line
+input color gr2nd          = clrLime;     // 2nd Line
+input color gr3rd          = clrRed;      // 3rd Line
+input color gr4th          = clrLime;     // 4th Line
+
+input string S3            = "---------"; // Box Setting
+input int boxBorderSize    = 0;           // Box border size
+input color downBorderColor = clrRed;     // Down border
+input color upBorderColor  = clrGreen;    // Up border
+input color downBoxColor   = clrRed;      // Down box
+input color upBoxColor     = clrGreen;    // Up box
+
+int             LinesWidth             = 2;              // Lines width
+
+double HP[],Price[],PriceRMS[],PriceRMS2[],VolHP[],Vol[],ema[],ema2[],VolRMS[],ZeroLine[];
+
+string indicatorFileName;
+
+int ma_handle;
+
+int lastAlert = 0;
+
+string prefix = "gmz_";
+
+double point;
+
+int hVolume;
+
+
+
+double grCan[],rdCan[],buyCond[],selCond[],dir[],firstGrCnt[],firstRdCnt[],secndGrCnt[],secndRdCnt[],thirdGrCnt[],thirdRdCnt[],forthGrCnt[],forthRdCnt[];
+double firstRd_[],secndGr_[],thirdRd_[],forthGr_[],firstGr_[],secndRd_[],thirdGr_[],forthRd_[];
+double upHI[],upLO[],dwHI[],dwLO[],upHiIdx[],upLoIdx[],dwHiIdx[],dwLoIdx[],stRdLine[],stGrLine[];
+double BuyBias[],SellBias[],sessionHighPrice[],sessionLowPrice[],sessionOpenPrice[],sessionOpenTime[],sessionBox[],inSession[]; 
+
+double inNewDay[],dayPrice[],dayTime[];
+
+ 
+
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+
+int OnInit()
+  {
+
+   if (!o_symbol.Name(Symbol())) return(INIT_FAILED); // sets symbol name  
+
+   point = o_symbol.Point();
+   
+   int k = -1;
+   SetIndexBuffer(++k,BuyBias,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"Buy Bias");PlotIndexSetInteger(k,PLOT_ARROW,108);
+   SetIndexBuffer(++k,SellBias,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"Sell Bias");PlotIndexSetInteger(k,PLOT_ARROW,108);
+
+   SetIndexBuffer(++k,firstRd_,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"First Red");PlotIndexSetInteger(k,PLOT_ARROW,234);
+   SetIndexBuffer(++k,secndGr_,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"Second Green");PlotIndexSetInteger(k,PLOT_ARROW,233);
+   SetIndexBuffer(++k,thirdRd_,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"Third Red");PlotIndexSetInteger(k,PLOT_ARROW,234);
+   SetIndexBuffer(++k,forthGr_,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"Forth Green");PlotIndexSetInteger(k,PLOT_ARROW,233);
+   SetIndexBuffer(++k,firstGr_,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"First Green");PlotIndexSetInteger(k,PLOT_ARROW,234);
+   SetIndexBuffer(++k,secndRd_,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"Second Red");PlotIndexSetInteger(k,PLOT_ARROW,233);
+   SetIndexBuffer(++k,thirdGr_,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"Third Green");PlotIndexSetInteger(k,PLOT_ARROW,234);
+   SetIndexBuffer(++k,forthRd_,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"Forth Red");PlotIndexSetInteger(k,PLOT_ARROW,233);
+
+   SetIndexBuffer(++k,grCan,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"grCan");
+   SetIndexBuffer(++k,rdCan,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"rdCan");
+   SetIndexBuffer(++k,buyCond,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"buyCond");
+   SetIndexBuffer(++k,selCond,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"selCond");
+
+   SetIndexBuffer(++k,dir,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"dir");
+   SetIndexBuffer(++k,firstGrCnt,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"firstGrCnt");
+   SetIndexBuffer(++k,firstRdCnt,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"firstRdCnt");
+   SetIndexBuffer(++k,secndGrCnt,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"secndGrCnt");
+   SetIndexBuffer(++k,secndRdCnt,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"secndRdCnt");
+   SetIndexBuffer(++k,thirdGrCnt,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"thirdGrCnt");
+   SetIndexBuffer(++k,thirdRdCnt,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"thirdRdCnt");
+   SetIndexBuffer(++k,forthGrCnt,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"forthGrCnt");
+   SetIndexBuffer(++k,forthRdCnt,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"forthRdCnt");
+
+   SetIndexBuffer(++k,upHI,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"upHI");
+   SetIndexBuffer(++k,upLO,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"upLO");
+   SetIndexBuffer(++k,dwHI,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"dwHI");
+   SetIndexBuffer(++k,dwLO,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"dwLO");
+   SetIndexBuffer(++k,upHiIdx,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"upHiIdx");
+
+   SetIndexBuffer(++k,upLoIdx,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"upLoIdx");
+   SetIndexBuffer(++k,dwHiIdx,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"dwHiIdx");
+   SetIndexBuffer(++k,dwLoIdx,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"dwLoIdx");
+   SetIndexBuffer(++k,stRdLine,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"stRdLine");
+   SetIndexBuffer(++k,stGrLine,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"stGrLine");
+
+   SetIndexBuffer(++k,sessionHighPrice,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"sessionHighPrice");
+   SetIndexBuffer(++k,sessionLowPrice,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"sessionLowPrice");
+   SetIndexBuffer(++k,sessionOpenPrice,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"sessionOpenPrice");
+   
+   SetIndexBuffer(++k,sessionOpenTime,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"sessionOpenTime");
+
+   SetIndexBuffer(++k,sessionBox,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"sessionBox");
+   SetIndexBuffer(++k,inSession,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"inSession");
+      
+   SetIndexBuffer(++k,inNewDay,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"inSession");
+   SetIndexBuffer(++k,dayPrice,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"inSession");
+   SetIndexBuffer(++k,dayTime,INDICATOR_DATA);PlotIndexSetString(k,PLOT_LABEL,"inSession");
+  
+      
+//---
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+  {
+//---
+
+   if(prev_calculated<1)
+     {
+      ArrayInitialize(BuyBias,EMPTY_VALUE);
+      ArrayInitialize(SellBias,EMPTY_VALUE);
+      ArrayInitialize(firstRd_,0);
+      ArrayInitialize(secndGr_,0);
+      ArrayInitialize(thirdRd_,0);
+      ArrayInitialize(forthGr_,0);
+      ArrayInitialize(firstGr_,0);
+      ArrayInitialize(secndRd_,0);
+      ArrayInitialize(thirdGr_,0);
+      ArrayInitialize(forthRd_,0);
+      ArrayInitialize(grCan,0);
+      ArrayInitialize(rdCan,0);
+      ArrayInitialize(buyCond,EMPTY_VALUE);
+      ArrayInitialize(selCond,EMPTY_VALUE);
+      ArrayInitialize(dir,EMPTY_VALUE);
+      ArrayInitialize(firstGrCnt,EMPTY_VALUE);
+      ArrayInitialize(firstRdCnt,EMPTY_VALUE);
+      ArrayInitialize(secndGrCnt,EMPTY_VALUE);
+      ArrayInitialize(secndRdCnt,EMPTY_VALUE);
+      ArrayInitialize(thirdGrCnt,EMPTY_VALUE);
+      ArrayInitialize(thirdRdCnt,EMPTY_VALUE);
+      ArrayInitialize(forthGrCnt,EMPTY_VALUE);
+      ArrayInitialize(forthRdCnt,EMPTY_VALUE);
+      ArrayInitialize(upHI,EMPTY_VALUE);
+      ArrayInitialize(upLO,EMPTY_VALUE);
+      ArrayInitialize(dwHI,EMPTY_VALUE);
+      ArrayInitialize(dwLO,EMPTY_VALUE);
+      ArrayInitialize(upHiIdx,EMPTY_VALUE);
+      ArrayInitialize(upLoIdx,EMPTY_VALUE);
+      ArrayInitialize(dwHiIdx,EMPTY_VALUE);
+      ArrayInitialize(dwLoIdx,EMPTY_VALUE);
+      ArrayInitialize(stRdLine,EMPTY_VALUE);
+      ArrayInitialize(stGrLine,EMPTY_VALUE);
+      ArrayInitialize(sessionHighPrice,0);
+      ArrayInitialize(sessionLowPrice,0);
+      ArrayInitialize(sessionOpenPrice,0);
+      ArrayInitialize(sessionOpenTime,0);
+      ArrayInitialize(sessionBox,EMPTY_VALUE);
+      ArrayInitialize(inSession,EMPTY_VALUE);
+      
+      ArrayInitialize(inNewDay,0);
+      ArrayInitialize(dayPrice,0);
+      ArrayInitialize(dayTime,0);
+      
+
+     }      
+
+   int    counted_bars;
+
+   counted_bars=prev_calculated;
+   
+   if (counted_bars > 0) {counted_bars--;}
+
+   ArraySetAsSeries(BuyBias,true);
+   ArraySetAsSeries(SellBias,true);
+   ArraySetAsSeries(firstRd_,true);
+   ArraySetAsSeries(secndGr_,true);
+   ArraySetAsSeries(thirdRd_,true);
+   ArraySetAsSeries(forthGr_,true);
+   ArraySetAsSeries(firstGr_,true);
+   ArraySetAsSeries(secndRd_,true);
+   ArraySetAsSeries(thirdGr_,true);
+   ArraySetAsSeries(forthRd_,true);
+   ArraySetAsSeries(grCan,true);
+   ArraySetAsSeries(rdCan,true);
+   ArraySetAsSeries(buyCond,true);
+   ArraySetAsSeries(selCond,true);
+   ArraySetAsSeries(dir,true);
+   ArraySetAsSeries(firstGrCnt,true);
+   ArraySetAsSeries(firstRdCnt,true);
+   ArraySetAsSeries(secndGrCnt,true);
+   ArraySetAsSeries(secndRdCnt,true);
+   ArraySetAsSeries(thirdGrCnt,true);
+   ArraySetAsSeries(thirdRdCnt,true);
+   ArraySetAsSeries(forthGrCnt,true);
+   ArraySetAsSeries(forthRdCnt,true);
+   ArraySetAsSeries(upHI,true);
+   ArraySetAsSeries(upLO,true);
+   ArraySetAsSeries(dwHI,true);
+   ArraySetAsSeries(dwLO,true);
+   ArraySetAsSeries(upHiIdx,true);
+   ArraySetAsSeries(upLoIdx,true);
+   ArraySetAsSeries(dwHiIdx,true);
+   ArraySetAsSeries(dwLoIdx,true);
+   ArraySetAsSeries(stRdLine,true);
+   ArraySetAsSeries(stGrLine,true);
+   ArraySetAsSeries(sessionHighPrice,true);
+   ArraySetAsSeries(sessionLowPrice,true);
+   ArraySetAsSeries(sessionOpenPrice,true);
+   ArraySetAsSeries(sessionOpenTime,true);   
+   ArraySetAsSeries(sessionBox,true);
+   ArraySetAsSeries(inSession,true);
+      ArraySetAsSeries(inNewDay,true);
+      ArraySetAsSeries(dayPrice,true);
+      ArraySetAsSeries(dayTime,true);
+   
+   
+   ArraySetAsSeries(low, true);
+   ArraySetAsSeries(close, true);
+   ArraySetAsSeries(high, true);
+   ArraySetAsSeries(open, true);
+   ArraySetAsSeries(time, true);
+   ArraySetAsSeries(tick_volume, true);
+   ArraySetAsSeries(volume, true);
+   
+   
+      
+   double ma[1];
+   
+   int limit = MathMin(rates_total-counted_bars,rates_total-3); 
+ 
+   
+   for (int i = limit;i>=0; i--)
+   {
+   
+      bool time1     = isTradeTime(session1_1,session1_2,enSess1,i); 
+      bool time2     = isTradeTime(session2_1,session2_2,enSess2,i);
+      bool time3     = isTradeTime(session1_2,session2_2,enSess2,i);
+      
+      bool day_is_open = isTradeTime(day_open,"23:00",true,i);
+//      bool day_is_open2 = isTradeTime(day_open,"23:00",true,i+1);
+      
+      grCan[i]       = grCan[i+1];
+      rdCan[i]       = rdCan[i+1];
+
+      if (time1 && close[i] > close[i+1]){
+          grCan[i] =grCan[i] +1;
+      }
+      
+      if (time1 && close[i] < close[i+1]){
+          rdCan[i] = rdCan[i]+1;
+      }
+      int t_Can = (int)(rdCan[i] + grCan[i]);
+      
+      buyCond[i] = grCan[i] >= 4 && t_Can == 7 ? 1 : 0;
+      selCond[i] = rdCan[i] >= 4 && t_Can == 7 ? 1 : 0;
+      
+      dir[i] = dir[i+1];
+      
+      if (buyCond[i]==1){
+          dir[i] =  1;
+      }
+      if (selCond[i]==1){
+          dir[i] = -1;
+      }
+      
+      if (!time2){
+          dir[i] = 0;
+      }
+      
+      firstGrCnt[i] = firstGrCnt[i+1];
+      firstRdCnt[i] = firstRdCnt[i+1];
+      
+      secndGrCnt[i] = secndGrCnt[i+1];
+      secndRdCnt[i] = secndRdCnt[i+1];
+      
+      thirdGrCnt[i] = thirdGrCnt[i+1];
+      thirdRdCnt[i] = thirdRdCnt[i+1];
+      
+      forthGrCnt[i] = forthGrCnt[i+1];
+      forthRdCnt[i] = forthRdCnt[i+1];
+      
+      double candPip = MathAbs(high[i]-low[i]) * 10;
+      
+      double bullCanPip = close[i] > close[i+1] && close[i+1] > close[i+2] ? MathAbs(((high[i+1]-low[i+1]) + (high[i]-low[i]))) * 10 : candPip;
+      double bearCanPip = close[i] < close[i+1] && close[i+1] < close[i+2] ? MathAbs(((high[i+1]-low[i+1]) + (high[i]-low[i]))) * 10 : candPip;
+      
+      bool pipCondBull = candPip >= pipSize || bullCanPip >= pipSize2;
+      bool pipCondBear = candPip >= pipSize || bearCanPip >= pipSize2;
+      
+      bool firstRd = dir[i] ==  1 && close[i] < close[i+1] && pipCondBear && time3;
+      bool secndGr = dir[i] ==  1 && close[i] > close[i+1] && firstRdCnt[i] >= 1;
+      bool thirdRd = dir[i] ==  1 && close[i] < close[i+1] && secndGrCnt[i] >= 1 ;
+      bool forthGr = dir[i] ==  1 && close[i] > close[i+1] && thirdRdCnt[i] >= 1;
+      
+      bool firstGr = dir[i] == -1 && close[i] > close[i+1] && pipCondBull && time3;
+      bool secndRd = dir[i] == -1 && close[i] < close[i+1] && firstGrCnt[i] >= 1;
+      bool thirdGr = dir[i] == -1 && close[i] > close[i+1] && secndRdCnt[i] >= 1;
+      bool forthRd = dir[i] == -1 && close[i] < close[i+1] && thirdGrCnt[i] >= 1;
+      
+      if (firstRd){
+          firstRdCnt[i] = firstRdCnt[i]+1;
+      }
+      if (firstGr){
+          firstGrCnt[i] = firstGrCnt[i]+1;
+      }
+      
+      if (secndRd){
+          secndRdCnt[i] = secndRdCnt[i]+1;
+      }
+      if (secndGr){
+          secndGrCnt[i] = secndGrCnt[i]+1;
+      }
+      
+      if (thirdRd){
+          thirdRdCnt[i] = thirdRdCnt[i]+1;
+      }
+      if (thirdGr){
+          thirdGrCnt[i] = thirdGrCnt[i]+1;
+      }
+      
+      if (forthRd){
+          forthRdCnt[i] = forthRdCnt[i]+1;
+      }
+      if (forthGr){
+          forthGrCnt[i] = forthGrCnt[i]+1;
+      }
+
+
+      if (!time2){
+          rdCan[i] = 0;
+          grCan[i] = 0;
+          firstGrCnt[i] = 0;
+          firstRdCnt[i] = 0;
+          secndGrCnt[i] = 0;
+          secndRdCnt[i] = 0;
+          thirdGrCnt[i] = 0;
+          thirdRdCnt[i] = 0;
+          forthGrCnt[i] = 0;
+          forthRdCnt[i] = 0;
+      }
+
+      firstRd_[i] = firstRd && firstRdCnt[i] == 1 && canIdEn ? high[i] + 20*Point() : EMPTY_VALUE;
+      secndGr_[i] = secndGr && secndGrCnt[i] == 1 && canIdEn ? low[i] - 20*Point() : EMPTY_VALUE;
+      thirdRd_[i] = thirdRd && thirdRdCnt[i] == 1 && canIdEn ? high[i] + 20*Point() : EMPTY_VALUE;
+      forthGr_[i] = forthGr && forthGrCnt[i] == 1 && canIdEn ? low[i] - 20*Point() : EMPTY_VALUE;
+      
+      firstGr_[i] = firstGr && firstGrCnt[i] == 1 && canIdEn ? high[i] + 20*Point() : EMPTY_VALUE;
+      secndRd_[i] = secndRd && secndRdCnt[i] == 1 && canIdEn ? low[i] - 20*Point() : EMPTY_VALUE;
+      thirdGr_[i] = thirdGr && thirdGrCnt[i] == 1 && canIdEn ? high[i] + 20*Point() : EMPTY_VALUE;
+      forthRd_[i] = forthRd && forthRdCnt[i] == 1 && canIdEn ? low[i] - 20*Point() : EMPTY_VALUE;
+
+      upHI[i] = upHI[i+1];
+      upLO[i] = upHI[i+1];
+      dwHI[i] = upHI[i+1];
+      dwLO[i] = upHI[i+1];
+      
+      upHiIdx[i] = upHI[i+1];
+      upLoIdx[i] = upHI[i+1];
+      dwHiIdx[i] = upHI[i+1];
+      dwLoIdx[i] = upHI[i+1];
+
+      stRdLine[i] = 0;
+      stGrLine[i] = 0;
+
+      DrawLine("line1",iTime(_Symbol,0,rates_total-100),80,iTime(_Symbol,0,0),80,clrWhite,STYLE_SOLID);
+
+      datetime timeend = i >= lineLen ? time[i-lineLen] : (time[i] - time[i+1]) * lineLen;
+
+      if (firstRd && firstRdCnt[i] == 1){
+          stRdLine[i] = (double)time[i];
+          DrawLine("stRdLine" + TimeToString(time[i]),time[i],high[i],timeend ,high[i],rd1st,STYLE_SOLID);
+      }
+      if (stRdLine[i+1] != EMPTY_VALUE && stRdLine[i+1] != 0 && close[i] < close[i+1]){
+          stRdLine[i] = (double)time[i];
+          DrawLine("stRdLine" + TimeToString(time[i]),time[i],high[i],timeend ,high[i],rd1st,STYLE_SOLID);
+          ObjectDelete(0,prefix+"stRdLine" + TimeToString((int)stRdLine[i+1]));
+      
+      }
+      if (secndGr && secndGrCnt[i] == 1){
+          DrawLine("secndGr" + TimeToString(time[i]),time[i],low[i],timeend ,low[i],rd2nd,STYLE_SOLID);
+      }
+      if (thirdRd && thirdRdCnt[i] == 1){
+          DrawLine("thirdRd" + TimeToString(time[i]),time[i],high[i],timeend ,high[i],rd3rd,STYLE_SOLID);
+      }
+      if (forthGr && forthGrCnt[i] == 1){
+          DrawLine("forthGr" + TimeToString(time[i]),time[i],low[i],timeend ,low[i],rd4th,STYLE_SOLID);
+      }
+      
+      if (firstGr && firstGrCnt[i] == 1){
+          stGrLine[i] = (double)time[i];
+          DrawLine("stGrLine" + TimeToString(time[i]),time[i],low[i],timeend ,low[i],gr1st,STYLE_SOLID);
+      }
+      if (stGrLine[i+1]!=EMPTY_VALUE && stGrLine[i+1]!=0 && close[i] > close[i+1]){
+          stGrLine[i] = (double)time[i];
+          DrawLine("stGrLine" + TimeToString(time[i]),time[i],low[i],timeend ,low[i],gr1st,STYLE_SOLID);
+          ObjectDelete(0,prefix+"stGrLine" + TimeToString((int)stGrLine[i+1]));
+      
+      }
+      if (secndRd && secndRdCnt[i] == 1){
+          DrawLine("secndRd" + TimeToString(time[i]),time[i],high[i],timeend ,high[i],gr2nd,STYLE_SOLID);
+      }   
+      if (thirdGr && thirdGrCnt[i] == 1){
+          DrawLine("thirdGr" + TimeToString(time[i]),time[i],low[i],timeend ,low[i],rd3rd,STYLE_SOLID);
+      }
+      if (forthRd && forthRdCnt[i] == 1){
+          DrawLine("forthRd" + TimeToString(time[i]),time[i],high[i],timeend ,high[i],rd3rd,STYLE_SOLID);
+      }
+
+      BuyBias[i] = buyCond[i]==1 && (buyCond[i+1] == EMPTY_VALUE || buyCond[i+1] == 0) ? low[i] - 20*Point() : EMPTY_VALUE;
+      SellBias[i] = selCond[i]==1 && (selCond[i+1] == EMPTY_VALUE || selCond[i+1] == 0) ? high[i] + 20*Point() : EMPTY_VALUE;
+
+// Create variables
+      sessionHighPrice[i]     = sessionHighPrice[i+1];
+      sessionLowPrice[i]      = sessionLowPrice[i+1];
+      sessionOpenPrice[i]     = sessionOpenPrice[i+1];
+      sessionOpenTime[i]     = sessionOpenTime[i+1];
+      sessionBox[i]           = sessionBox[i+1];
+
+      inSession[i]      = time2 ? 1 : 0;
+      bool sessionStart = inSession[i]==1 && inSession[i+1]==0;
+
+      inNewDay[i]       = day_is_open ? 1 : 0;
+      bool dayStart     = inNewDay[i]==1 && inNewDay[i+1]==0;
+
+      dayPrice[i] = dayPrice[i+1];
+      dayTime[i]  = dayTime[i+1];
+      if (dayStart){
+          DrawLine("day" + TimeToString((int)dayTime[i]),(int)dayTime[i],dayPrice[i],time[i+1] ,dayPrice[i],clrBlue,STYLE_SOLID);
+          dayPrice[i] = open[i];
+          dayTime[i]  = (double)time[i];
+      }
+      DrawLine("day" + TimeToString((int)dayTime[i]),(int)dayTime[i],dayPrice[i],time[i] ,dayPrice[i],clrBlue,STYLE_SOLID);
+      
+      
+      if (sessionStart){
+          sessionHighPrice[i] = high[i];
+          sessionLowPrice[i]  = low[i];
+          sessionOpenPrice[i] = open[i];
+          sessionOpenTime[i]  = (double)time[i];
+      }
+      else if (inSession[i]==1){
+          sessionHighPrice[i] = MathMax(sessionHighPrice[i], high[i]);
+          sessionLowPrice[i]  = MathMin(sessionLowPrice[i], low[i]);
+      }
+      
+      MqlDateTime dt;
+      TimeToStruct(time[i],dt);
+
+      if (sessionStart){
+          RectangleCreate("sessionBox"+TimeToString((int)sessionOpenTime[i]),time[i],high[i],time[i],high[i],clrBlack);
+      }
+
+      if (inSession[i]==1){
+          if (close[i] > sessionOpenPrice[i]){
+              RectangleCreate("sessionBox"+IntegerToString((int)sessionOpenTime[i]),(int)sessionOpenTime[i],sessionHighPrice[i],time[i]+(time[i]-time[i+1]),sessionLowPrice[i],upBoxColor);
+          } else{
+              RectangleCreate("sessionBox"+IntegerToString((int)sessionOpenTime[i]),(int)sessionOpenTime[i],sessionHighPrice[i],time[i]+(time[i]-time[i+1]),sessionLowPrice[i],downBoxColor);
+          }
+      }
+
+/*
+var dayOpen = float(na)
+dayChange = time(timeframe.period, "0000-0001", "UTC-5")
+if dayChange
+    dayOpen := na
+if dayChange[i+1]
+    dayOpen := open[i+1]
+
+plot(dayOpen, title = "Open Price Line", style = plot.style_linebr, offset = -1)
+if not na(dayOpen) && na(dayOpen[i+1])
+    label.new(bar_index-3, dayOpen, text="Open", style=label.style_text_outline, size = size.tiny, color=color.black, textcolor = color.white)
+*/
+
+      
+
+   }
+   
+   return(rates_total);
+}
+bool DrawLine(
+                 string          name,  
+                 datetime              time1,           
+                 double                price1,          
+                 datetime              time2,           
+                 double                price2,
+                 color           clr,
+                 ENUM_LINE_STYLE style=STYLE_DOT
+                 )
+  {
+
+   name = prefix + name;
+   
+
+   const long            chart_ID=0;
+   const int             sub_window=ChartWindowFind();
+   const int             width=1;
+   const bool            back=true;
+   const bool            selection=false;
+   const bool            ray_right=false;
+   const bool            hidden=true;
+   const long            z_order=999;
+
+//   ResetLastError();
+
+   ObjectDelete(chart_ID,name);
+   if(!ObjectCreate(chart_ID,name,OBJ_TREND,sub_window,time1,price1,time2,price2))
+     {
+     }
+   ObjectSetInteger(chart_ID,name,OBJPROP_COLOR,clr);
+   ObjectSetInteger(chart_ID,name,OBJPROP_STYLE,style);
+   ObjectSetInteger(chart_ID,name,OBJPROP_WIDTH,width);
+   ObjectSetInteger(chart_ID,name,OBJPROP_BACK,back);
+   ObjectSetInteger(chart_ID,name,OBJPROP_SELECTABLE,selection);
+   ObjectSetInteger(chart_ID,name,OBJPROP_SELECTED,selection);
+   ObjectSetInteger(chart_ID,name,OBJPROP_RAY_RIGHT,ray_right);
+   ObjectSetInteger(chart_ID,name,OBJPROP_HIDDEN,hidden);
+   ObjectSetInteger(chart_ID,name,OBJPROP_ZORDER,z_order);
+   return(true);
+  }
+
+/*
+void SendAlert(string text=""){
+  
+      if (!AlertsOn){return;}
+      
+      if (AlertPopup){
+         Alert(text);
+      }
+      if (AlertSound){
+         PlaySound("alert.wav");
+      }
+      if (AlertEmail){
+         SendMail(text,text);
+      }
+      if (AlertPush){
+         SendNotification(text);
+      }
+}  */
+
+
+bool isTradeTime(string StartTime, string EndTime, bool ontime,int i)
+{
+   if(!ontime){return true;}
+
+   MqlDateTime dt;
+   TimeToStruct(iTime(_Symbol,PERIOD_CURRENT,i),dt);
+
+   string sep=":";
+   ushort u_sep;
+   int k;
+   u_sep=StringGetCharacter(sep,0);
+   string times[];
+
+   int hour = dt.hour;
+   int t = dt.hour*60 + dt.min;
+   int t1_1,t1_2;
+
+   k=StringSplit(StartTime,u_sep,times);
+   if(k==2)
+   {
+      t1_1 = (int)(StringToInteger(times[0])*60+StringToInteger(times[1]));
+   }
+   else
+   {
+      t1_1 = 0;
+   }
+
+   k=StringSplit(EndTime,u_sep,times);
+   if(k==2)
+   {
+      t1_2 = (int)(StringToInteger(times[0])*60+StringToInteger(times[1]));
+   }
+   else
+   {
+      t1_2 = 0;
+   }
+
+   if(t >= t1_1 && t < t1_2)
+   {
+      return true;
+   }
+   else
+   {
+      return false;
+   }
+
+}
+
+bool RectangleCreate(
+                     string          name="Rectangle", 
+                     datetime              time1=0,          
+                     double                price1=0,         
+                     datetime              time2=0,          
+                     double                price2=0,
+                     color                clr=clrRed,
+                     const ENUM_LINE_STYLE style1=STYLE_SOLID,
+                     const int             width=2,   
+                     const bool            fill=false,
+                     const bool            back=false,
+                     const bool            selection=false,
+                     const bool            hidden=true,
+                     const long            z_order=200)
+{
+
+   const long            chart_ID=0;
+
+
+   name = prefix + name;
+
+   ResetLastError();
+   ObjectDelete(0,name);
+   if(!ObjectCreate(chart_ID,name,OBJ_RECTANGLE,0,time1,price1,time2,price2))
+     {
+     
+        ObjectSetInteger(chart_ID,name,OBJPROP_TIME,0,time1);
+        ObjectSetInteger(chart_ID,name,OBJPROP_TIME,1,time2);
+        ObjectSetDouble(chart_ID,name,OBJPROP_PRICE,0,price1);
+        ObjectSetDouble(chart_ID,name,OBJPROP_PRICE,1,price2);
+        ObjectSetInteger(chart_ID,name,OBJPROP_COLOR,clr);
+     
+     return(true);
+     }
+   ObjectSetInteger(chart_ID,name,OBJPROP_COLOR,clr);
+   ObjectSetInteger(chart_ID,name,OBJPROP_STYLE,style1);
+   ObjectSetInteger(chart_ID,name,OBJPROP_WIDTH,width);
+   ObjectSetInteger(chart_ID,name,OBJPROP_FILL,fill);
+   ObjectSetInteger(chart_ID,name,OBJPROP_BACK,false);
+   ObjectSetInteger(chart_ID,name,OBJPROP_SELECTABLE,selection);
+   ObjectSetInteger(chart_ID,name,OBJPROP_SELECTED,selection);
+   ObjectSetInteger(chart_ID,name,OBJPROP_HIDDEN,hidden);
+   ObjectSetInteger(chart_ID,name,OBJPROP_ZORDER,z_order);
+   return(true);
+  } 
+  
+  
+void OnDeinit(const int reason)
+  {
+  
+   ObjectsDeleteAll(0,prefix); 
+  }  
